@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "ptt:list": "node src/ptt/listLatest.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "ptt:list:pages": "node src/ptt/listByPages.js"
+    "ptt:list:pages": "node src/ptt/listByPages.js",
+    "ptt:fetch:article": "node src/ptt/fetchArticle.js"
   },
   "repository": {
     "type": "git",

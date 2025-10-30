@@ -9,6 +9,7 @@ import { buildRecommendation } from '../recommender.js';
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 import { filterBrandContext } from '../ai/filterBrandContext.js';
+import { summarizeMentions } from '../ai/summarizeMentions.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -114,11 +115,15 @@ async function main() {
     await wait(RATE_LIMIT_MS);
   }
 
-
   const result = buildRecommendation(brand, texts);
-  console.log('\n✅ 推薦結果：');
+  console.log('\n✅ 推薦結果（統計版）：');
   console.log(result.primary);
   for (const s of result.secondary) console.log('・', s);
+
+  // AI 摘要
+  const summary = await summarizeMentions(brand, result.top3);
+  console.log('\n🪄 AI 摘要：');
+  console.log(summary);
 
   console.log('\n📊 Top 3：');
   for (const [drink, data] of result.top3) {

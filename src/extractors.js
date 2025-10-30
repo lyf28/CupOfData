@@ -60,19 +60,13 @@ export function extractMentions(text) {
   const results = [];
 
   for (const line of lines) {
-    const drink = DRINKS.find((d) => line.includes(d));
+    const drink = [...DRINKS].sort((a, b) => b.length - a.length).find((d) => line.includes(d));
     if (!drink) continue;
-
     const sugar = SUGARS.find((s) => line.includes(s)) || null;
     const ice = ICES.find((i) => line.includes(i)) || null;
+    results.push({ drink, sugar, ice, snippet: line.slice(0, 80) });
+    }
 
-    results.push({
-      drink,
-      sugar,
-      ice,
-      snippet: line.slice(0, 80),
-    });
-  }
 
   return results;
 }

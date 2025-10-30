@@ -43,3 +43,36 @@ export const ICES = [
   '多冰',
   '熱',
 ];
+
+/**
+ * extractMentions(text)
+ * @param {string} text - 任意留言或內文
+ * @returns {Array<{drink:string,sugar:string|null,ice:string|null,snippet:string}>}
+ */
+export function extractMentions(text) {
+  if (!text || typeof text !== 'string') return [];
+
+  const lines = text
+    .split(/[。！？!?\n\r]/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const results = [];
+
+  for (const line of lines) {
+    const drink = DRINKS.find((d) => line.includes(d));
+    if (!drink) continue;
+
+    const sugar = SUGARS.find((s) => line.includes(s)) || null;
+    const ice = ICES.find((i) => line.includes(i)) || null;
+
+    results.push({
+      drink,
+      sugar,
+      ice,
+      snippet: line.slice(0, 80),
+    });
+  }
+
+  return results;
+}

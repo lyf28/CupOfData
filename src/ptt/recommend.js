@@ -10,6 +10,9 @@ import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 import { filterBrandContext } from '../ai/filterBrandContext.js';
 import { summarizeMentions } from '../ai/summarizeMentions.js';
+import { segmentByBrandAI } from '../ai/segmentByBrandAI.js';
+// 留作備援
+import { splitByBrand } from '../utils/splitByBrand.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -89,18 +92,33 @@ async function main() {
     try {
       const art = await fetchArticle(post.url);
 
-      // 將文章主體與留言結合為句子陣列
+      // 先試 AI 分段；AI 不可用或失敗時退回規則分段；再不行就整篇
+      let segments = await segmentByBrandAI(art.content);
+
+      if (!segments || (segments.length === 1 && segments[0].brand === "unknown")) {
+        const backup = splitByBrand(art.content, []);
+        segments = backup?.length ? backup : [{ brand: "unknown", content: art.content }];
+      }
+
+      const relevantSegments = segments
+        .filter((s) => s.brand && (s.brand === brand || s.brand.includes(brand)))
+        .map((s) => s.content);
+
+      const baseLines = [];
+      if (art.title?.includes(brand)) baseLines.push(art.title);
+
       const lines = [
-        art.title,
-        art.content,
+        ...baseLines,
+        ...relevantSegments,
         ...(art.comments || []).map((c) => c.text)
       ];
 
+      // 逐句跑語境過濾
       const filtered = [];
       for (const line of lines) {
         const keep = await filterBrandContext(brand, line);
         if (keep) filtered.push(line);
-        await wait(200); // 小延遲避免 hitting API limits
+        await wait(200);
       }
 
       if (filtered.length > 0) {

@@ -8,7 +8,8 @@
     "ptt:list": "node src/ptt/listLatest.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "ptt:list:pages": "node src/ptt/listByPages.js",
-    "ptt:fetch:article": "node src/ptt/fetchArticle.js"
+    "ptt:fetch:article": "node src/ptt/fetchArticle.js",
+    "ptt:batch": "node src/ptt/batchFetch.js"
   },
   "repository": {
     "type": "git",

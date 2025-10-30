@@ -22,21 +22,33 @@ export async function fetchArticle(url) {
   const author = $('#main-content .article-meta-value').eq(0).text().trim();
   const date   = $('#main-content .article-meta-value').eq(3).text().trim();
 
-  // ✅ 先抓留言（.push）再清理其他元素
+  // 抓留言（.push）
   const comments = [];
   $('.push').each((_, el) => {
     const tag  = $(el).find('.push-tag').text().trim();
-    const user = $(el).find('.push-userid').text().trim();
+    const user = $(el).find('.push-userid').text().trim();   // 用 user 當唯一 ID
     const text = $(el).find('.push-content').text().replace(/^: /, '').trim();
     const time = $(el).find('.push-ipdatetime').text().trim();
-    if (text) comments.push({ tag, user, text, time });
+    if (text) comments.push({ tag, author: user, text, time }); // 改欄位名為 author
   });
 
-  // 然後清理 meta / push，留下內文文字
+  // 清理 meta / push，留下內文文字
   $('#main-content .article-meta-tag, #main-content .article-meta-value, .push, .f2').remove();
   const content = $('#main-content').text().trim().replace(/\s+/g, ' ');
 
-  return { url, title, author, date, content, comments };
+  const article = { url, title, author, date, content, comments };
+
+  // 去除同一作者重複留言
+  if (article.comments?.length) {
+    const seen = new Set();
+    article.comments = article.comments.filter((c) => {
+      if (seen.has(c.author)) return false;
+      seen.add(c.author);
+      return true;
+    });
+  }
+
+  return article;
 }
 
 if (process.argv[1].endsWith('fetchArticle.js')) {

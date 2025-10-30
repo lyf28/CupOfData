@@ -8,6 +8,7 @@ import { fetchArticle } from './fetchArticle.js';
 import { buildRecommendation } from '../recommender.js';
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
+import { filterBrandContext } from '../ai/filterBrandContext.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -86,13 +87,33 @@ async function main() {
   for (const [i, post] of targets.entries()) {
     try {
       const art = await fetchArticle(post.url);
-      texts.push([post.title, art.content, (art.comments || []).map(c => c.text).join(' ')].join('\n'));
-      console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}`);
+
+      // 將文章主體與留言結合為句子陣列
+      const lines = [
+        art.title,
+        art.content,
+        ...(art.comments || []).map((c) => c.text)
+      ];
+
+      const filtered = [];
+      for (const line of lines) {
+        const keep = await filterBrandContext(brand, line);
+        if (keep) filtered.push(line);
+        await wait(200); // 小延遲避免 hitting API limits
+      }
+
+      if (filtered.length > 0) {
+        texts.push(filtered.join('\n'));
+        console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}（${filtered.length} 條相關句）`);
+      } else {
+        console.log(`  [${i + 1}/${targets.length}] 🚫 ${post.title}（無相關內容）`);
+      }
     } catch (e) {
       console.warn(`  [${i + 1}/${targets.length}] ⚠️ ${post.url}｜${e.message}`);
     }
     await wait(RATE_LIMIT_MS);
   }
+
 
   const result = buildRecommendation(brand, texts);
   console.log('\n✅ 推薦結果：');

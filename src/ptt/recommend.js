@@ -11,8 +11,8 @@ import * as cheerio from 'cheerio';
 import { filterBrandContext } from '../ai/filterBrandContext.js';
 import { summarizeMentions } from '../ai/summarizeMentions.js';
 import { segmentByBrandAI } from '../ai/segmentByBrandAI.js';
-// 留作備援
 import { splitByBrand } from '../utils/splitByBrand.js';
+import { splitByPttSections } from '../utils/splitByPttSections.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -113,7 +113,6 @@ async function main() {
         ...(art.comments || []).map((c) => c.text)
       ];
 
-      // 逐句跑語境過濾
       const filtered = [];
       for (const line of lines) {
         const keep = await filterBrandContext(brand, line);
@@ -138,7 +137,6 @@ async function main() {
   console.log(result.primary);
   for (const s of result.secondary) console.log('・', s);
 
-  // AI 摘要
   const summary = await summarizeMentions(brand, result.top3);
   console.log('\n🪄 AI 摘要：');
   console.log(summary);

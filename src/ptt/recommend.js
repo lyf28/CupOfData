@@ -93,31 +93,47 @@ async function main() {
       const art = await fetchArticle(post.url);
 
       // 先試 AI 分段；AI 不可用或失敗時退回規則分段；再不行就整篇
-      let segments = await segmentByBrandAI(art.content);
+      // 🥇 1️⃣ 先用 PTT 斷頭格式切段（最準）
+      let sections = splitByPttSections(art.content);
 
-      if (!segments || (segments.length === 1 && segments[0].brand === "unknown")) {
-        const backup = splitByBrand(art.content, []);
-        segments = backup?.length ? backup : [{ brand: "unknown", content: art.content }];
+      // 🥈 2️⃣ 對 "unknown" 的段落再用 AI 補強
+      let segments = [];
+      for (const sec of sections) {
+        if (sec.brand === "unknown") {
+          const aiSeg = await segmentByBrandAI(sec.content);
+          segments.push(...aiSeg);
+        } else {
+          segments.push(sec);
+        }
       }
 
+      // 🥉 3️⃣ 只保留與目標品牌完全相等的段落
       const relevantSegments = segments
-        .filter((s) => s.brand && (s.brand === brand || s.brand.includes(brand)))
+        .filter((s) => s.brand === brand)
         .map((s) => s.content);
 
-      const baseLines = [];
-      if (art.title?.includes(brand)) baseLines.push(art.title);
-
-      const lines = [
-        ...baseLines,
+      // 🧱 4️⃣ 組合候選句（標題 + 內容 + 留言）
+      let candidateLines = [
+        ...(art.title.includes(brand) ? [art.title] : []),
         ...relevantSegments,
         ...(art.comments || []).map((c) => c.text)
       ];
 
+      // 🚫 5️⃣ 移除 generic 飲品（紅茶、綠茶、奶茶）但沒出現品牌的句子（避免誤判）
+      const genericWords = ["紅茶", "綠茶", "奶茶", "烏龍茶"];
+      candidateLines = candidateLines.filter((line) => {
+        if (genericWords.some(g => line.includes(g)) && !line.includes(brand)) {
+          return false;
+        }
+        return true;
+      });
+
+      // 🎛️ 6️⃣ 最後交給 AI 過濾品牌 Context
       const filtered = [];
-      for (const line of lines) {
+      for (const line of candidateLines) {
         const keep = await filterBrandContext(brand, line);
         if (keep) filtered.push(line);
-        await wait(200);
+        await wait(150);
       }
 
       if (filtered.length > 0) {

@@ -148,12 +148,13 @@ async function main() {
     await wait(RATE_LIMIT_MS);
   }
 
-  const result = buildRecommendation(brand, texts);
+  const result = await buildRecommendation(brand, texts);
   console.log('\n✅ 推薦結果（統計版）：');
   console.log(result.primary);
   for (const s of result.secondary) console.log('・', s);
 
   const summary = await summarizeMentions(brand, result.top3);
+
   console.log('\n🪄 AI 摘要：');
   console.log(summary);
 

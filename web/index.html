@@ -302,23 +302,134 @@
 </main>
 
 <script>
-  // 快速帶入品牌
-  document.querySelectorAll('.pill').forEach(p => {
-    p.addEventListener('click', () => {
-      document.getElementById('brand-input').value = p.dataset.brand;
+  // ---- 假資料：之後會由 /api/recommend 回傳同樣格式 ----
+  const sampleData = {
+    brand: "五桐號",
+    primary: "最多人推薦 五桐號 的「抹茶奶霜桂花冰」！另外「紅茶」也很常被提到～",
+    secondary: [
+      "「紅茶」 也不錯喔！",
+      "「奶茶」（建議：微糖） 也不錯喔！"
+    ],
+    summary:
+      "🍹 五桐號推薦結果：\n抹茶奶霜桂花冰深受喜愛，搭配微糖紅茶與奶茶，口感清新又不會太甜！",
+    top3: [
+      { drink: "抹茶奶霜桂花冰", count: 1 },
+      { drink: "紅茶", count: 1 },
+      { drink: "奶茶", count: 1 }
+    ],
+    logs: [
+      {
+        title: "[心得] 五桐號抹茶奶霜桂花冰",
+        lines: ["下次來試試看", "沒有愛抹茶但這款好喝耶"]
+      },
+      {
+        title: "[心得] 五桐號-鐵觀音焙奶茶",
+        lines: ["我是點微糖的喝起來還不錯", "鐵觀音茶味很明顯"]
+      }
+    ]
+  };
+
+  function renderRecommendation(data) {
+    // 主要推薦文字
+    const primaryEl = document.getElementById("primary-text");
+    primaryEl.textContent = data.primary || "目前還沒有可靠的推薦結果～";
+
+    // secondary list
+    const secondaryEl = document.getElementById("secondary-list");
+    secondaryEl.innerHTML = "";
+    (data.secondary || []).forEach((line) => {
+      const li = document.createElement("li");
+      li.textContent = line;
+      secondaryEl.appendChild(li);
+    });
+
+    // summary
+    const summaryEl = document.getElementById("summary-block");
+    summaryEl.textContent =
+      data.summary || `目前在 PTT 上關於 ${data.brand} 的實際飲料評價太少，暫時無法形成推薦。`;
+
+    // top3
+    const top3El = document.getElementById("top3-list");
+    top3El.innerHTML = "";
+    (data.top3 || []).forEach((item) => {
+      const li = document.createElement("li");
+      const left = document.createElement("span");
+      const right = document.createElement("span");
+      left.textContent = item.drink;
+      right.textContent = `${item.count} 次`;
+      li.appendChild(left);
+      li.appendChild(right);
+      top3El.appendChild(li);
+    });
+
+    // logs
+    const logPanel = document.getElementById("log-panel");
+    logPanel.innerHTML = "";
+    (data.logs || []).forEach((art) => {
+      const wrap = document.createElement("div");
+      wrap.className = "log-article";
+
+      const title = document.createElement("div");
+      title.className = "log-article-title";
+      title.textContent = art.title;
+      wrap.appendChild(title);
+
+      const lines = document.createElement("div");
+      lines.className = "log-lines";
+      (art.lines || []).forEach((ln) => {
+        const d = document.createElement("div");
+        d.textContent = ln;
+        lines.appendChild(d);
+      });
+      wrap.appendChild(lines);
+
+      logPanel.appendChild(wrap);
+    });
+  }
+
+  // ---- 初始渲染（用 sampleData）----
+  renderRecommendation(sampleData);
+
+  // 快速帶入品牌 pill
+  const brandInput = document.getElementById("brand-input");
+  document.querySelectorAll(".pill").forEach((p) => {
+    p.addEventListener("click", () => {
+      brandInput.value = p.dataset.brand;
+      // 先用 sampleData 模擬，把文案中的品牌替換掉
+      const fake = JSON.parse(JSON.stringify(sampleData));
+      fake.brand = p.dataset.brand;
+      fake.primary = fake.primary.replace(/五桐號/g, fake.brand);
+      fake.summary = fake.summary.replace(/五桐號/g, fake.brand);
+      renderRecommendation(fake);
     });
   });
 
-  // Log 展開
-  const logToggle = document.getElementById('log-toggle');
-  const logPanel = document.getElementById('log-panel');
+  // 查詢按鈕（目前先用假資料，之後改成 fetch API）
+  const searchBtn = document.getElementById("search-btn");
+  searchBtn.addEventListener("click", async () => {
+    const brand = brandInput.value.trim();
+    if (!brand) return;
+
+    // TODO: 之後這裡改成 fetch(`/api/recommend?brand=${encodeURIComponent(brand)}`)
+    // 目前先用 sampleData 模擬
+    const fake = JSON.parse(JSON.stringify(sampleData));
+    fake.brand = brand;
+    fake.primary = fake.primary.replace(/五桐號/g, fake.brand);
+    fake.summary = fake.summary.replace(/五桐號/g, fake.brand);
+    renderRecommendation(fake);
+  });
+
+  // Log 展開切換
+  const logToggle = document.getElementById("log-toggle");
+  const logPanel = document.getElementById("log-panel");
   let logOpen = false;
-  logToggle.addEventListener('click', () => {
+  logToggle.addEventListener("click", () => {
     logOpen = !logOpen;
-    logPanel.style.display = logOpen ? 'block' : 'none';
+    logPanel.style.display = logOpen ? "block" : "none";
     logToggle.querySelector("span").textContent = logOpen ? "▾" : "▸";
   });
 </script>
+
 
 </body>
 </html>

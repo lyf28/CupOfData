@@ -12,36 +12,35 @@ import { extractMentions } from './extractors.js';
  * @returns {object} summary - 推薦摘要結果
  */
 export function buildRecommendation(brand, texts) {
-  const mentions = texts.flatMap((t) => extractMentions(t));
+  const mentionsPerDoc = texts.map((t) => extractMentions(t));
 
+  // 每篇文章對同一飲品只加一次票
   const stats = new Map();
+  for (const docMentions of mentionsPerDoc) {
+    const seenDrinksInThisDoc = new Set();
+    for (const m of docMentions) {
+      if (seenDrinksInThisDoc.has(m.drink)) continue;
+      seenDrinksInThisDoc.add(m.drink);
 
-  // 統計每種飲料的出現次數與屬性
-  for (const m of mentions) {
-    const key = m.drink;
-    if (!stats.has(key)) {
-      stats.set(key, { count: 0, sugar: new Map(), ice: new Map() });
+      if (!stats.has(m.drink)) {
+        stats.set(m.drink, { count: 0, sugar: new Map(), ice: new Map() });
+      }
+      const row = stats.get(m.drink);
+      row.count++;
+      if (m.sugar) row.sugar.set(m.sugar, (row.sugar.get(m.sugar) || 0) + 1);
+      if (m.ice)   row.ice.set(m.ice,   (row.ice.get(m.ice)   || 0) + 1);
     }
-    const row = stats.get(key);
-    row.count++;
-    if (m.sugar) row.sugar.set(m.sugar, (row.sugar.get(m.sugar) || 0) + 1);
-    if (m.ice) row.ice.set(m.ice, (row.ice.get(m.ice) || 0) + 1);
   }
 
-  // 依提及次數排序
   const sorted = [...stats.entries()].sort((a, b) => b[1].count - a[1].count);
   const top3 = sorted.slice(0, 3);
 
-  // 組合自然語言推薦句
-  const primary = makePrimarySentence(brand, top3);
-  const secondary = makeSecondarySentences(top3);
-
   return {
     brand,
-    totalMentions: mentions.length,
+    totalMentions: mentionsPerDoc.reduce((n, arr) => n + arr.length, 0),
     top3,
-    primary,
-    secondary,
+    primary: makePrimarySentence(brand, top3),
+    secondary: makeSecondarySentences(top3),
   };
 }
 

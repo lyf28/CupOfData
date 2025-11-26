@@ -8,6 +8,11 @@ import { fetchArticle } from './fetchArticle.js';
 import { buildRecommendation } from '../recommender.js';
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
+import { filterBrandContext } from '../ai/filterBrandContext.js';
+import { summarizeMentions } from '../ai/summarizeMentions.js';
+import { segmentByBrandAI } from '../ai/segmentByBrandAI.js';
+import { splitByBrand } from '../utils/splitByBrand.js';
+import { splitByPttSections } from '../utils/splitByPttSections.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -86,8 +91,57 @@ async function main() {
   for (const [i, post] of targets.entries()) {
     try {
       const art = await fetchArticle(post.url);
-      texts.push([post.title, art.content, (art.comments || []).map(c => c.text).join(' ')].join('\n'));
-      console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}`);
+
+      // 先試 AI 分段；AI 不可用或失敗時退回規則分段；再不行就整篇
+      // 🥇 1️⃣ 先用 PTT 斷頭格式切段（最準）
+      let sections = splitByPttSections(art.content);
+
+      // 🥈 2️⃣ 對 "unknown" 的段落再用 AI 補強
+      let segments = [];
+      for (const sec of sections) {
+        if (sec.brand === "unknown") {
+          const aiSeg = await segmentByBrandAI(sec.content);
+          segments.push(...aiSeg);
+        } else {
+          segments.push(sec);
+        }
+      }
+
+      // 🥉 3️⃣ 只保留與目標品牌完全相等的段落
+      const relevantSegments = segments
+        .filter((s) => s.brand === brand)
+        .map((s) => s.content);
+
+      // 🧱 4️⃣ 組合候選句（標題 + 內容 + 留言）
+      let candidateLines = [
+        ...(art.title.includes(brand) ? [art.title] : []),
+        ...relevantSegments,
+        ...(art.comments || []).map((c) => c.text)
+      ];
+
+      // 🚫 5️⃣ 移除 generic 飲品（紅茶、綠茶、奶茶）但沒出現品牌的句子（避免誤判）
+      const genericWords = ["紅茶", "綠茶", "奶茶", "烏龍茶"];
+      candidateLines = candidateLines.filter((line) => {
+        if (genericWords.some(g => line.includes(g)) && !line.includes(brand)) {
+          return false;
+        }
+        return true;
+      });
+
+      // 🎛️ 6️⃣ 最後交給 AI 過濾品牌 Context
+      const filtered = [];
+      for (const line of candidateLines) {
+        const keep = await filterBrandContext(brand, line);
+        if (keep) filtered.push(line);
+        await wait(150);
+      }
+
+      if (filtered.length > 0) {
+        texts.push(filtered.join('\n'));
+        console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}（${filtered.length} 條相關句）`);
+      } else {
+        console.log(`  [${i + 1}/${targets.length}] 🚫 ${post.title}（無相關內容）`);
+      }
     } catch (e) {
       console.warn(`  [${i + 1}/${targets.length}] ⚠️ ${post.url}｜${e.message}`);
     }
@@ -95,9 +149,13 @@ async function main() {
   }
 
   const result = buildRecommendation(brand, texts);
-  console.log('\n✅ 推薦結果：');
+  console.log('\n✅ 推薦結果（統計版）：');
   console.log(result.primary);
   for (const s of result.secondary) console.log('・', s);
+
+  const summary = await summarizeMentions(brand, result.top3);
+  console.log('\n🪄 AI 摘要：');
+  console.log(summary);
 
   console.log('\n📊 Top 3：');
   for (const [drink, data] of result.top3) {

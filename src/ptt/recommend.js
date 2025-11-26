@@ -13,6 +13,7 @@ import { summarizeMentions } from '../ai/summarizeMentions.js';
 import { segmentByBrandAI } from '../ai/segmentByBrandAI.js';
 import { splitByBrand } from '../utils/splitByBrand.js';
 import { splitByPttSections } from '../utils/splitByPttSections.js';
+import { isRecommendationSentence } from '../ai/isRecommendationSentence.js';
 
 const UA = process.env.USER_AGENT || 'CupOfData/0.1 (+contact:you@example.com)';
 const BASE = 'https://www.ptt.cc';
@@ -51,7 +52,9 @@ function parseList(html) {
  *   node src/ptt/recommend.js <brand> [pages=8] [limit=20]
  */
 async function main() {
-  const [brand = '', pagesArg = '8', limitArg = '20'] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const [brand = '', pagesArg = '8', limitArg = '20'] = args;
+  const LOG_MODE = args.includes('--log');
   const pages = Number(pagesArg);
   const limit = Number(limitArg);
 
@@ -113,34 +116,53 @@ async function main() {
         .map((s) => s.content);
 
       // 🧱 4️⃣ 組合候選句（標題 + 內容 + 留言）
-      let candidateLines = [
-        ...(art.title.includes(brand) ? [art.title] : []),
+            // 🧱 4️⃣ 組合候選句：標題單獨處理，其餘才丟 AI 篩
+      const titleLines = art.title.includes(brand) ? [art.title] : [];
+      let otherLines = [
         ...relevantSegments,
-        ...(art.comments || []).map((c) => c.text)
+        ...(art.comments || []).map((c) => c.text),
       ];
 
-      // 🚫 5️⃣ 移除 generic 飲品（紅茶、綠茶、奶茶）但沒出現品牌的句子（避免誤判）
+      // 🚫 移除 generic 飲品（紅茶、綠茶、奶茶）但沒出現品牌的句子（避免誤判）
       const genericWords = ["紅茶", "綠茶", "奶茶", "烏龍茶"];
-      candidateLines = candidateLines.filter((line) => {
-        if (genericWords.some(g => line.includes(g)) && !line.includes(brand)) {
+      otherLines = otherLines.filter((line) => {
+        if (genericWords.some((g) => line.includes(g)) && !line.includes(brand)) {
           return false;
         }
         return true;
       });
 
-      // 🎛️ 6️⃣ 最後交給 AI 過濾品牌 Context
+      // 🎛️ 6️⃣ AI 雙重過濾只套在「內文＋留言」
       const filtered = [];
-      for (const line of candidateLines) {
-        const keep = await filterBrandContext(brand, line);
-        if (keep) filtered.push(line);
-        await wait(150);
+
+      // 6-1. 標題只要有品牌就直接保留（不需要 AI 判斷）
+      for (const line of titleLines) {
+        filtered.push(line);
+      }
+
+      // 6-2. 內文＋留言才丟給 AI 做品牌＋評價句判斷
+      // 6-2. 內文＋留言：只要段落判定屬於該品牌 → 全部保留
+      for (const line of otherLines) {
+        filtered.push(line);
       }
 
       if (filtered.length > 0) {
         texts.push(filtered.join('\n'));
         console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}（${filtered.length} 條相關句）`);
+
+        if (LOG_MODE) {
+          console.log("    ── Log mode │ 留下句子：");
+          for (const line of filtered) {
+            console.log("       •", line);
+          }
+        }
+
       } else {
         console.log(`  [${i + 1}/${targets.length}] 🚫 ${post.title}（無相關內容）`);
+
+        if (LOG_MODE) {
+          console.log("    ── Log mode │ 沒有留下任何句子");
+        }
       }
     } catch (e) {
       console.warn(`  [${i + 1}/${targets.length}] ⚠️ ${post.url}｜${e.message}`);
@@ -148,7 +170,20 @@ async function main() {
     await wait(RATE_LIMIT_MS);
   }
 
-  const result = buildRecommendation(brand, texts);
+    const result = await buildRecommendation(brand, texts);
+
+  // 如果完全沒有飲料被提到，就不要硬叫 AI 編故事
+  if (!result.top3 || result.top3.length === 0) {
+    console.log('\n✅ 推薦結果（統計版）：');
+    console.log('目前還沒有可靠的飲料推薦（相關心得太少或都被過濾掉）～');
+
+    console.log('\n🪄 AI 摘要：');
+    console.log(`目前在 PTT 上關於 ${brand} 的實際飲料評價太少，暫時無法形成推薦。`);
+
+    console.log('\n📊 Top 3：');
+    return;
+  }
+
   console.log('\n✅ 推薦結果（統計版）：');
   console.log(result.primary);
   for (const s of result.secondary) console.log('・', s);

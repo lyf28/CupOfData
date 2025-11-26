@@ -11,14 +11,25 @@ import { extractMentions } from './extractors.js';
  * @param {string[]} texts - 多筆留言或內文
  * @returns {object} summary - 推薦摘要結果
  */
-export function buildRecommendation(brand, texts) {
-  const mentionsPerDoc = texts.map((t) => extractMentions(t));
+export async function buildRecommendation(brand, texts) {
+  // 支援 extractMentions 同步或 async 兩種情況
+  const mentionsPerDoc = await Promise.all(
+    texts.map(async (t) => {
+      const res = await extractMentions(t);
+      // 安全防呆：確保一定是陣列
+      if (!res) return [];
+      if (Array.isArray(res)) return res;
+      return [];
+    })
+  );
 
   // 每篇文章對同一飲品只加一次票
   const stats = new Map();
   for (const docMentions of mentionsPerDoc) {
     const seenDrinksInThisDoc = new Set();
     for (const m of docMentions) {
+      if (!m || !m.drink) continue;
+
       if (seenDrinksInThisDoc.has(m.drink)) continue;
       seenDrinksInThisDoc.add(m.drink);
 

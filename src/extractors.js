@@ -1,72 +1,71 @@
 /**
- * 🧋 CupOfData Extractors - v0.1
- * 定義飲料、甜度、冰量關鍵詞集
- * 後續會用於關鍵字匹配與抽取
+ * 🧋 extractors.js（第 8 關：Hybrid Extractor）
  */
 
-export const DRINKS = [
-  '珍珠奶茶',
-  '波霸奶茶',
-  '奶茶',
-  '紅茶',
-  '綠茶',
-  '青茶',
-  '四季春',
-  '烏龍',
-  '冬瓜茶',
-  '蜜桃凍飲',
-  '阿薩姆',
-  '鐵觀音',
-  '豆漿紅茶',
-  '金蜜檸檬',
-  '翡翠檸檬',
-  '柳橙綠',
-  '熟成紅茶',
-  '紅茶拿鐵',
-  '黑糖珍珠',
+import { extractDrinksAI } from "./ai/extractDrinksAI.js";
+
+// ===== 原本的規則抽取（保留） =====
+
+const DRINK_WORDS = [
+  "奶茶", "紅茶", "綠茶", "烏龍", "鮮奶茶",
+  "四季春", "冬瓜茶", "蜜桃", "凍飲", "冰茶",
+  "水果茶", "鐵觀音", "珍珠奶茶", "黑糖", "奶蓋",
 ];
 
-export const SUGARS = [
-  '無糖',
-  '微糖',
-  '少糖',
-  '半糖',
-  '正常糖',
-  '多糖',
-];
-
-export const ICES = [
-  '去冰',
-  '微冰',
-  '少冰',
-  '正常冰',
-  '多冰',
-  '熱',
-];
-
-/**
- * extractMentions(text)
- * @param {string} text - 任意留言或內文
- * @returns {Array<{drink:string,sugar:string|null,ice:string|null,snippet:string}>}
- */
 export function extractMentions(text) {
-  if (!text || typeof text !== 'string') return [];
+  const ruleHits = [];
 
-  const lines = text
-    .split(/[。！？!?\n\r]/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  for (const w of DRINK_WORDS) {
+    if (text.includes(w)) {
+      ruleHits.push({
+        drink: w,
+        sugar: extractSugar(text),
+        ice: extractIce(text),
+      });
+    }
+  }
 
-  const results = [];
-
-  for (const line of lines) {
-    const drink = [...DRINKS].sort((a, b) => b.length - a.length).find((d) => line.includes(d));
-    if (!drink) continue;
-    const sugar = SUGARS.find((s) => line.includes(s)) || null;
-    const ice = ICES.find((i) => line.includes(i)) || null;
-    results.push({ drink, sugar, ice, snippet: line.slice(0, 80) });
+  const aiHits = []; // AI 抽取的飲料名
+  let aiDrinks = [];
+  return (async () => {
+    try {
+      aiDrinks = await extractDrinksAI(text); // AI 補強
+    } catch {
+      aiDrinks = [];
     }
 
+    for (const d of aiDrinks) {
+      ruleHits.push({
+        drink: d,
+        sugar: extractSugar(text),
+        ice: extractIce(text),
+      });
+    }
 
-  return results;
+    // 移除重複飲料
+    const seen = new Set();
+    const unique = [];
+    for (const m of ruleHits) {
+      if (!seen.has(m.drink)) {
+        unique.push(m);
+        seen.add(m.drink);
+      }
+    }
+
+    return unique;
+  })();
+}
+
+// ===== 甜度冰量抽取（保留） =====
+
+function extractSugar(s) {
+  const re = /(無糖|微糖|半糖|正常糖)/;
+  const m = s.match(re);
+  return m ? m[1] : null;
+}
+
+function extractIce(s) {
+  const re = /(去冰|微冰|少冰|正常冰|熱)/;
+  const m = s.match(re);
+  return m ? m[1] : null;
 }

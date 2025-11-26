@@ -1,0 +1,35 @@
+/**
+ * 🍹 extractDrinksAI(text)
+ * 用 AI 從一段文字中抽出飲品名稱
+ * 回傳：string[]（飲品名陣列）
+ */
+
+import OpenAI from "openai";
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export async function extractDrinksAI(text) {
+  const prompt = `
+你是一個飲料名稱抽取器。從下列句子中找出「有提到的飲品名稱」，格式必須為 JSON array。
+請不要加入店名，只抓飲品（例：珍珠奶茶、蜜桃凍飲、抹茶奶霜桂花冰、四季春青茶）。
+
+句子：
+"${text}"
+
+只回傳 JSON array，例如：
+["珍珠奶茶", "蜜桃凍飲"]
+`;
+
+  try {
+    const res = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+    });
+
+    const raw = res.choices[0].message.content.trim();
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn("extractDrinksAI error:", err.message);
+    return [];
+  }
+}

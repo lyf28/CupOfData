@@ -52,7 +52,9 @@ function parseList(html) {
  *   node src/ptt/recommend.js <brand> [pages=8] [limit=20]
  */
 async function main() {
-  const [brand = '', pagesArg = '8', limitArg = '20'] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const [brand = '', pagesArg = '8', limitArg = '20'] = args;
+  const LOG_MODE = args.includes('--log');
   const pages = Number(pagesArg);
   const limit = Number(limitArg);
 
@@ -139,22 +141,28 @@ async function main() {
       }
 
       // 6-2. 內文＋留言才丟給 AI 做品牌＋評價句判斷
+      // 6-2. 內文＋留言：只要段落判定屬於該品牌 → 全部保留
       for (const line of otherLines) {
-        const okBrand = await filterBrandContext(brand, line);
-        if (!okBrand) continue;
-
-        const okTaste = await isRecommendationSentence(line);
-        if (!okTaste) continue;
-
         filtered.push(line);
-        await wait(150);
       }
 
       if (filtered.length > 0) {
         texts.push(filtered.join('\n'));
         console.log(`  [${i + 1}/${targets.length}] ✅ ${post.title}（${filtered.length} 條相關句）`);
+
+        if (LOG_MODE) {
+          console.log("    ── Log mode │ 留下句子：");
+          for (const line of filtered) {
+            console.log("       •", line);
+          }
+        }
+
       } else {
         console.log(`  [${i + 1}/${targets.length}] 🚫 ${post.title}（無相關內容）`);
+
+        if (LOG_MODE) {
+          console.log("    ── Log mode │ 沒有留下任何句子");
+        }
       }
     } catch (e) {
       console.warn(`  [${i + 1}/${targets.length}] ⚠️ ${post.url}｜${e.message}`);
